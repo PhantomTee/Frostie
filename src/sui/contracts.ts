@@ -14,6 +14,9 @@ export const LEADERBOARD_ID = process.env.EXPO_PUBLIC_LEADERBOARD_ID ?? "";
 export const MINT_REGISTRY_ID = process.env.EXPO_PUBLIC_MINT_REGISTRY_ID ?? "";
 export const DELEGATE_REGISTRY_ID = process.env.EXPO_PUBLIC_DELEGATE_REGISTRY_ID ?? "";
 export const MARKETPLACE_ID = process.env.EXPO_PUBLIC_MARKETPLACE_ID ?? "";
+export const CHALLENGE_CONFIG_ID = process.env.EXPO_PUBLIC_CHALLENGE_CONFIG_ID ?? "";
+// Shared system Clock object, fixed at this address on every Sui network.
+export const CLOCK_ID = "0x6";
 
 // Checked once at app startup (see EnvCheck) — a missing object/package ID
 // would otherwise surface as a cryptic Move call failure deep in gameplay

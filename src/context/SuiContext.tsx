@@ -13,7 +13,7 @@ const SUI_CHAIN = `sui:${SUI_NETWORK}` as const;
 
 export type TxArg =
   | { kind: "object"; id: string }
-  | { kind: "pure"; type: "u64" | "address" | "bool"; value: string | number | boolean }
+  | { kind: "pure"; type: "u64" | "address" | "bool" | "string"; value: string | number | boolean }
   // Splits a fresh coin of `amount` MIST off the sender's gas coin, for
   // calls (like marketplace purchases) that need a Coin<SUI> argument.
   | { kind: "splitCoin"; amount: string | number };
@@ -35,7 +35,9 @@ interface SuiContextType {
   availableWallets: AvailableWallet[];
   connect: (walletName?: string) => Promise<boolean>;
   disconnect: () => void;
-  signAndExecute: (call: MoveCallParams) => Promise<{ digest: string } | null>;
+  signAndExecute: (
+    call: MoveCallParams | MoveCallParams[]
+  ) => Promise<{ digest: string; objectChanges?: any[] } | null>;
   hasNFT: boolean | null;
   highestScore: number;
   setHighestScore: (score: number) => void;
@@ -50,6 +52,12 @@ interface SuiContextType {
   // and remounts on close, which would otherwise forget it was submitted.
   submittedScore: number | null;
   setSubmittedScore: (score: number | null) => void;
+  // Id of a ChallengeMarket the player has joined but not yet attempted.
+  // Lives here (not in ChallengesScreen) so the next GameOver screen --
+  // reached by leaving Challenges and playing a fresh run -- can still see
+  // it and offer a "Submit Attempt" action off that run's new RunScore.
+  pendingChallengeMarketId: string | null;
+  setPendingChallengeMarketId: (id: string | null) => void;
 }
 
 const SuiContext = createContext<SuiContextType>({
@@ -70,6 +78,8 @@ const SuiContext = createContext<SuiContextType>({
   clearWalletError: () => {},
   submittedScore: null,
   setSubmittedScore: () => {},
+  pendingChallengeMarketId: null,
+  setPendingChallengeMarketId: () => {},
 });
 
 export const useSui = () => useContext(SuiContext);
@@ -154,6 +164,8 @@ function buildArgs(tx: Transaction, args: TxArg[] = []) {
         return tx.pure.address(String(arg.value));
       case "bool":
         return tx.pure.bool(Boolean(arg.value));
+      case "string":
+        return tx.pure.string(String(arg.value));
     }
   });
 }
@@ -168,6 +180,7 @@ export function SuiProvider({ children }: { children: React.ReactNode }) {
   const [walletError, setWalletError] = useState<string | null>(null);
   const clearWalletError = useCallback(() => setWalletError(null), []);
   const [submittedScore, setSubmittedScore] = useState<number | null>(null);
+  const [pendingChallengeMarketId, setPendingChallengeMarketId] = useState<string | null>(null);
   const [availableWallets, setAvailableWallets] = useState<AvailableWallet[]>([]);
   const walletRef = useRef<Wallet | null>(null);
   const accountRef = useRef<WalletAccount | null>(null);
@@ -299,16 +312,21 @@ export function SuiProvider({ children }: { children: React.ReactNode }) {
   // per transaction, every time. No burner/session key, no delegate
   // registration step, nothing to keep funded.
   const signAndExecute = useCallback(
-    async (call: MoveCallParams): Promise<{ digest: string } | null> => {
+    async (
+      calls: MoveCallParams | MoveCallParams[]
+    ): Promise<{ digest: string; objectChanges?: any[] } | null> => {
       const wallet = walletRef.current;
       const account = accountRef.current;
       if (!wallet || !account) return null;
+      const callList = Array.isArray(calls) ? calls : [calls];
       try {
         const tx = new Transaction();
-        tx.moveCall({
-          target: `${PACKAGE_ID}::${call.module}::${call.function}`,
-          arguments: buildArgs(tx, call.args),
-        });
+        for (const call of callList) {
+          tx.moveCall({
+            target: `${PACKAGE_ID}::${call.module}::${call.function}`,
+            arguments: buildArgs(tx, call.args),
+          });
+        }
         const executeFeature = wallet.features["sui:signAndExecuteTransaction"] as any;
         const result = await withWalletRetry<any>(() =>
           executeFeature.signAndExecuteTransaction({
@@ -318,8 +336,14 @@ export function SuiProvider({ children }: { children: React.ReactNode }) {
           })
         );
         if (!result?.digest) return null;
-        await suiClient.waitForTransaction({ digest: result.digest });
-        return { digest: result.digest };
+        // showObjectChanges lets callers that mint an object in this PTB
+        // (e.g. run_score::record_run) find the new object's id without a
+        // separate query.
+        const finalized = await suiClient.waitForTransaction({
+          digest: result.digest,
+          options: { showObjectChanges: true },
+        });
+        return { digest: result.digest, objectChanges: finalized.objectChanges ?? undefined };
       } catch (e) {
         console.warn("Transaction failed", e);
         setWalletError(
@@ -351,6 +375,8 @@ export function SuiProvider({ children }: { children: React.ReactNode }) {
         refreshOwnedTiers,
         walletError,
         clearWalletError,
+        pendingChallengeMarketId,
+        setPendingChallengeMarketId,
         submittedScore,
         setSubmittedScore,
       }}

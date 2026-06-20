@@ -87,6 +87,12 @@ export default class Engine {
 
   // Setup initial scene
   init = () => {
+    // Lightweight per-run move log -- direction + ms since run start, for
+    // each accepted move. Uploaded to Walrus at game-over so a future
+    // replay verifier has something to check a submitted score against;
+    // not consumed by anything on-chain yet.
+    this.inputLog = [];
+    this.runStartMs = Date.now();
     this.onGameInit();
 
     this.camera.position.z = 1;
@@ -189,6 +195,8 @@ export default class Engine {
     if (this.isGameEnded()) {
       return;
     }
+
+    this.inputLog?.push({ d: direction, t: Date.now() - this.runStartMs });
 
     const { SWIPE_UP, SWIPE_DOWN, SWIPE_LEFT, SWIPE_RIGHT } = swipeDirections;
 

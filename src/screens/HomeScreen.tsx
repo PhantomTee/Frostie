@@ -136,6 +136,7 @@ function Screen(props) {
               props.onShowCharacterSelect?.();
             }}
             onShop={() => props.onShop?.()}
+            onChallenges={() => props.onChallenges?.()}
           />
         </View>
       </TouchableOpacity>

@@ -22,6 +22,12 @@ export default function Footer(props) {
     return (
       <View style={{ flexDirection: "column" }}>
         <Button
+          onPress={collapse(props.onChallenges)}
+          style={[{ marginBottom: 8 }, imageStyle]}
+          imageStyle={imageStyle}
+          source={Images.button.rank}
+        />
+        <Button
           onPress={collapse(props.onShop)}
           style={[{ marginBottom: 8 }, imageStyle]}
           imageStyle={imageStyle}

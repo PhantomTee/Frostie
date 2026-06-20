@@ -164,6 +164,7 @@ function GameOver({ ...props }) {
       <Footer
         style={{ paddingLeft: left || 4, paddingRight: right || 4 }}
         score={props.score ?? 0}
+        inputLog={props.inputLog}
         showSettings={props.showSettings}
         setGameState={props.setGameState}
         onShowLeaderboard={props.onShowLeaderboard}

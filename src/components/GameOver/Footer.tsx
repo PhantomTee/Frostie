@@ -6,6 +6,8 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
+  TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -15,13 +17,16 @@ import Toast from "@/components/Toast";
 import Images from "@/Images";
 import State from "@/state";
 import { useSui } from "@/context/SuiContext";
-import { LEADERBOARD_ID, DELEGATE_REGISTRY_ID } from "@/sui/contracts";
+import { LEADERBOARD_ID, DELEGATE_REGISTRY_ID, CHALLENGE_CONFIG_ID, CLOCK_ID } from "@/sui/contracts";
 import { scoreShareUrl, scoreShareText, SHARE_SITE_URL } from "@/utils/twitterShare";
 import { txExplorerUrl } from "@/utils/explorer";
+import { suiClient } from "@/sui/client";
+import { uploadReplayBlob } from "@/utils/walrus";
 
 interface Props {
   style?: any;
   score: number;
+  inputLog?: Array<{ d: string; t: number }>;
   showSettings: () => void;
   setGameState: (state: any) => void;
   onShowLeaderboard: () => void;
@@ -33,6 +38,7 @@ const btnStyleNarrow  = { width: 46, height: 40 };
 export default function Footer({
   style,
   score,
+  inputLog,
   showSettings,
   setGameState,
   onShowLeaderboard,
@@ -44,6 +50,8 @@ export default function Footer({
     clearWalletError,
     submittedScore,
     setSubmittedScore,
+    pendingChallengeMarketId,
+    setPendingChallengeMarketId,
   } = useSui();
   const submitted = submittedScore === score;
   const { width: windowWidth } = useWindowDimensions();
@@ -56,6 +64,18 @@ export default function Footer({
   const [submitting, setSubmitting] = useState(false);
   const [savedDigest, setSavedDigest] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  // Id of the RunScore receipt minted alongside this run's leaderboard
+  // submit, set once that PTB lands. Backs the optional "Create Challenge"
+  // step below -- only a receipt from record_run can become a market's
+  // target score, never a raw number typed into this screen.
+  const [runScoreId, setRunScoreId] = useState<string | null>(null);
+  const [stakeInput, setStakeInput] = useState("1");
+  const [creatingMarket, setCreatingMarket] = useState(false);
+  const [marketDigest, setMarketDigest] = useState<string | null>(null);
+  const [marketCreated, setMarketCreated] = useState(false);
+  const [submittingAttempt, setSubmittingAttempt] = useState(false);
+  const [attemptResult, setAttemptResult] = useState<"won" | "missed" | null>(null);
+  const [attemptDigest, setAttemptDigest] = useState<string | null>(null);
 
   // Generic share sheet (distinct from the X-specific button below): native
   // OS share sheet on mobile, Web Share API where supported, and a clipboard
@@ -96,23 +116,115 @@ export default function Footer({
     setSubmitting(true);
     clearWalletError();
     try {
-      const result = await signAndExecute({
-        module: "leaderboard",
-        function: "submit_score",
-        args: [
-          { kind: "object", id: LEADERBOARD_ID },
-          { kind: "object", id: DELEGATE_REGISTRY_ID },
-          { kind: "pure", type: "u64", value: score },
-        ],
-      });
+      // Best-effort: a failed/slow upload shouldn't block saving the score,
+      // so record_run just gets an empty replay_blob_id in that case.
+      let replayBlobId = "";
+      if (inputLog && inputLog.length > 0) {
+        replayBlobId = (await uploadReplayBlob(JSON.stringify(inputLog))) ?? "";
+      }
+
+      // One signature, two calls: the leaderboard best-score update and a
+      // fresh RunScore receipt for *this* run, so a challenge market can
+      // later be created off a score that's provably backed by an
+      // on-chain-recorded run rather than a client-supplied number.
+      const result = await signAndExecute([
+        {
+          module: "leaderboard",
+          function: "submit_score",
+          args: [
+            { kind: "object", id: LEADERBOARD_ID },
+            { kind: "object", id: DELEGATE_REGISTRY_ID },
+            { kind: "pure", type: "u64", value: score },
+          ],
+        },
+        {
+          module: "run_score",
+          function: "record_run",
+          args: [
+            { kind: "pure", type: "u64", value: score },
+            { kind: "pure", type: "string", value: replayBlobId },
+            { kind: "object", id: CLOCK_ID },
+          ],
+        },
+      ]);
       if (result?.digest) {
         setSubmittedScore(score);
         setSavedDigest(result.digest);
+        const minted = result.objectChanges?.find(
+          (c: any) => c.type === "created" && c.objectType?.endsWith("::run_score::RunScore")
+        );
+        if (minted) setRunScoreId(minted.objectId);
       }
     } catch (e) {
       console.warn("Score submit failed", e);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const createMarket = async () => {
+    if (!runScoreId || creatingMarket || marketCreated) return;
+    const stakeSui = parseFloat(stakeInput);
+    if (!stakeSui || stakeSui <= 0) return;
+    const stakeMist = Math.round(stakeSui * 1_000_000_000);
+    setCreatingMarket(true);
+    clearWalletError();
+    try {
+      const result = await signAndExecute({
+        module: "challenge_market",
+        function: "create_market",
+        args: [
+          { kind: "object", id: runScoreId },
+          { kind: "splitCoin", amount: stakeMist },
+          { kind: "object", id: CLOCK_ID },
+        ],
+      });
+      if (result?.digest) {
+        setMarketDigest(result.digest);
+        setMarketCreated(true);
+      }
+    } catch (e) {
+      console.warn("Create market failed", e);
+    } finally {
+      setCreatingMarket(false);
+    }
+  };
+
+  const submitAttempt = async () => {
+    if (!runScoreId || !pendingChallengeMarketId || submittingAttempt) return;
+    setSubmittingAttempt(true);
+    clearWalletError();
+    try {
+      const result = await signAndExecute({
+        module: "challenge_market",
+        function: "submit_attempt",
+        args: [
+          { kind: "object", id: pendingChallengeMarketId },
+          { kind: "object", id: CHALLENGE_CONFIG_ID },
+          { kind: "object", id: runScoreId },
+          { kind: "object", id: CLOCK_ID },
+        ],
+      });
+      if (result?.digest) {
+        setAttemptDigest(result.digest);
+        // submit_attempt is a silent no-op on a miss, so the only way to
+        // tell win from miss is to read the market's settled/winner fields
+        // back after the call lands.
+        const market = await suiClient.getObject({
+          id: pendingChallengeMarketId,
+          options: { showContent: true },
+        });
+        const fields = (market.data?.content as any)?.fields;
+        const won =
+          fields?.settled === true &&
+          fields?.winner?.toLowerCase?.() === walletAddress?.toLowerCase();
+        setAttemptResult(won ? "won" : "missed");
+        if (won) setPendingChallengeMarketId(null);
+      }
+    } catch (e) {
+      console.warn("Submit attempt failed", e);
+    } finally {
+      setSubmittingAttempt(false);
     }
   };
 
@@ -136,7 +248,68 @@ export default function Footer({
         message="Share text copied to clipboard"
         onHide={() => setLinkCopied(false)}
       />
+      <Toast
+        visible={!!marketDigest}
+        message="Challenge market created"
+        linkLabel="View transaction"
+        linkUrl={marketDigest ? txExplorerUrl(marketDigest) : undefined}
+        onHide={() => setMarketDigest(null)}
+      />
+      <Toast
+        visible={!!attemptDigest}
+        message={
+          attemptResult === "won"
+            ? "You beat the target — payout sent!"
+            : "Submitted — didn't beat the target this time"
+        }
+        linkLabel="View transaction"
+        linkUrl={attemptDigest ? txExplorerUrl(attemptDigest) : undefined}
+        onHide={() => {
+          setAttemptDigest(null);
+          setAttemptResult(null);
+        }}
+      />
       {walletError && <Text style={styles.errorText}>{walletError}</Text>}
+      {runScoreId && pendingChallengeMarketId ? (
+        <View style={styles.marketRow}>
+          <Text style={styles.marketLabel}>You're in a challenge — submit this run?</Text>
+          <TouchableOpacity
+            style={[styles.createMarketBtn, submittingAttempt && styles.createMarketBtnDisabled]}
+            onPress={submitAttempt}
+            disabled={submittingAttempt}
+          >
+            {submittingAttempt ? (
+              <ActivityIndicator color="#0D2347" size="small" />
+            ) : (
+              <Text style={styles.createMarketBtnText}>Submit Attempt</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : runScoreId && !marketCreated && (
+        <View style={styles.marketRow}>
+          <Text style={styles.marketLabel}>Stake (SUI) to challenge this score:</Text>
+          <View style={styles.marketControls}>
+            <TextInput
+              style={styles.stakeInput}
+              value={stakeInput}
+              onChangeText={setStakeInput}
+              keyboardType="decimal-pad"
+              editable={!creatingMarket}
+            />
+            <TouchableOpacity
+              style={[styles.createMarketBtn, creatingMarket && styles.createMarketBtnDisabled]}
+              onPress={createMarket}
+              disabled={creatingMarket}
+            >
+              {creatingMarket ? (
+                <ActivityIndicator color="#0D2347" size="small" />
+              ) : (
+                <Text style={styles.createMarketBtnText}>Create Challenge</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
       <View style={[styles.container, style]}>
       {/* Settings */}
       <Button
@@ -221,5 +394,49 @@ const styles = StyleSheet.create({
     color: "#A0D8FF",
     textAlign: "center",
     marginBottom: 4,
+  },
+  marketRow: {
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  marketLabel: {
+    fontFamily: "retro",
+    fontSize: 10,
+    color: "#A0D8FF",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  marketControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  stakeInput: {
+    width: 56,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: "#0D2347",
+    borderWidth: 1,
+    borderColor: "#3B9FE8",
+    color: "#FFFFFF",
+    fontFamily: "retro",
+    fontSize: 12,
+    textAlign: "center",
+  },
+  createMarketBtn: {
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: "#FFD700",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  createMarketBtnDisabled: {
+    opacity: 0.6,
+  },
+  createMarketBtnText: {
+    fontFamily: "retro",
+    fontSize: 10,
+    color: "#0D2347",
   },
 });

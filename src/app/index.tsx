@@ -26,6 +26,7 @@ import { logEvent } from "@/Analytics";
 import MintNFTScreen from "@/screens/MintNFTScreen";
 import LeaderboardScreen from "@/screens/LeaderboardScreen";
 import MarketplaceScreen from "@/screens/MarketplaceScreen";
+import ChallengesScreen from "@/screens/ChallengesScreen";
 import GameContext from "@/context/GameContext";
 import { SuiProvider, useSui } from "@/context/SuiContext";
 import { isWebGLAvailable } from "@/utils/webgl";
@@ -56,6 +57,7 @@ const AppState = {
   leaderboard: "leaderboard",
   settings: "settings",
   marketplace: "marketplace",
+  challenges: "challenges",
 };
 
 class Game extends Component {
@@ -141,7 +143,7 @@ class Game extends Component {
     this.setState({ gameState });
 
     // Non-gameplay states don't need engine updates
-    if ([AppState.wallet, AppState.mint, AppState.leaderboard, AppState.settings, AppState.marketplace].includes(gameState)) return;
+    if ([AppState.wallet, AppState.mint, AppState.leaderboard, AppState.settings, AppState.marketplace, AppState.challenges].includes(gameState)) return;
 
     this.engine.gameState = gameState;
     const { playing, gameOver, paused, none } = State.Game;
@@ -272,6 +274,7 @@ class Game extends Component {
       AppState.leaderboard,
       AppState.settings,
       AppState.marketplace,
+      AppState.challenges,
       State.Game.gameOver,
       State.Game.none,
     ].includes(gameState);
@@ -349,6 +352,7 @@ class Game extends Component {
                 this.setState({ showCharacterSelect: true })
               }
               onShop={() => this.updateWithGameState(AppState.marketplace)}
+              onChallenges={() => this.updateWithGameState(AppState.challenges)}
               coins={this.props.coins ?? 0}
               highscore={this.props.highscore ?? 0}
               gamesPlayed={this.props.gamesPlayed ?? 0}
@@ -361,6 +365,7 @@ class Game extends Component {
           <View style={StyleSheet.absoluteFillObject}>
             <GameOverScreen
               score={score}
+              inputLog={this.engine.inputLog}
               showSettings={() => this.updateWithGameState(AppState.settings)}
               setGameState={(s) => this.updateWithGameState(s)}
               onShowLeaderboard={() => this.updateWithGameState(AppState.leaderboard)}
@@ -387,6 +392,12 @@ class Game extends Component {
         {gameState === AppState.marketplace && (
           <View style={StyleSheet.absoluteFillObject}>
             <MarketplaceScreen onClose={() => this.updateWithGameState(State.Game.none)} />
+          </View>
+        )}
+
+        {gameState === AppState.challenges && (
+          <View style={StyleSheet.absoluteFillObject}>
+            <ChallengesScreen onClose={() => this.updateWithGameState(State.Game.none)} />
           </View>
         )}
 
