@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Yeti in da Citi",
+    "slug": "yeti-in-da-citi",
+    "scheme": "yeti",
+    "privacy": "public",
+    "orientation": "portrait",
+    "primaryColor": "#87C6FF",
+    "icon": "./assets/icons/app.png",
+    "splash": {
+      "image": "./assets/icons/loading.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#87C6FF"
+    },
+    "ios": {
+      "icon": "./assets/icons/app.png",
+      "supportsTablet": true,
+      "buildNumber": "0.0.0"
+    },
+    "android": {
+      "icon": "./assets/icons/app.png",
+      "versionCode": 1
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-router"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "63c6199d-ad0f-4796-871b-b8d65e05680a"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/63c6199d-ad0f-4796-871b-b8d65e05680a"
+    }
+  }
+}
