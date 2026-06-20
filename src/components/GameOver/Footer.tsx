@@ -50,8 +50,8 @@ export default function Footer({
     clearWalletError,
     submittedScore,
     setSubmittedScore,
-    pendingChallengeMarketId,
-    setPendingChallengeMarketId,
+    pendingChallenge,
+    setPendingChallenge,
   } = useSui();
   const submitted = submittedScore === score;
   const { width: windowWidth } = useWindowDimensions();
@@ -191,7 +191,7 @@ export default function Footer({
   };
 
   const submitAttempt = async () => {
-    if (!runScoreId || !pendingChallengeMarketId || submittingAttempt) return;
+    if (!runScoreId || !pendingChallenge || submittingAttempt) return;
     setSubmittingAttempt(true);
     clearWalletError();
     try {
@@ -199,7 +199,7 @@ export default function Footer({
         module: "challenge_market",
         function: "submit_attempt",
         args: [
-          { kind: "object", id: pendingChallengeMarketId },
+          { kind: "object", id: pendingChallenge.marketId },
           { kind: "object", id: CHALLENGE_CONFIG_ID },
           { kind: "object", id: runScoreId },
           { kind: "object", id: CLOCK_ID },
@@ -211,7 +211,7 @@ export default function Footer({
         // tell win from miss is to read the market's settled/winner fields
         // back after the call lands.
         const market = await suiClient.getObject({
-          id: pendingChallengeMarketId,
+          id: pendingChallenge.marketId,
           options: { showContent: true },
         });
         const fields = (market.data?.content as any)?.fields;
@@ -219,7 +219,7 @@ export default function Footer({
           fields?.settled === true &&
           fields?.winner?.toLowerCase?.() === walletAddress?.toLowerCase();
         setAttemptResult(won ? "won" : "missed");
-        if (won) setPendingChallengeMarketId(null);
+        if (won) setPendingChallenge(null);
       }
     } catch (e) {
       console.warn("Submit attempt failed", e);
@@ -259,8 +259,8 @@ export default function Footer({
         visible={!!attemptDigest}
         message={
           attemptResult === "won"
-            ? "You beat the target — payout sent!"
-            : "Submitted — didn't beat the target this time"
+            ? "You beat the target, payout sent!"
+            : "Submitted, didn't beat the target this time"
         }
         linkLabel="View transaction"
         linkUrl={attemptDigest ? txExplorerUrl(attemptDigest) : undefined}
@@ -270,9 +270,9 @@ export default function Footer({
         }}
       />
       {walletError && <Text style={styles.errorText}>{walletError}</Text>}
-      {runScoreId && pendingChallengeMarketId ? (
+      {runScoreId && pendingChallenge ? (
         <View style={styles.marketRow}>
-          <Text style={styles.marketLabel}>You're in a challenge — submit this run?</Text>
+          <Text style={styles.marketLabel}>You're in a challenge, submit this run?</Text>
           <TouchableOpacity
             style={[styles.createMarketBtn, submittingAttempt && styles.createMarketBtnDisabled]}
             onPress={submitAttempt}

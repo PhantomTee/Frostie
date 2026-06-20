@@ -30,6 +30,7 @@ export default function GameHUD({
   onToggleDpad,
   nextReviveCost,
   canRevive,
+  challengeTargetScore,
 }: {
   coins: number;
   muted: boolean;
@@ -40,14 +41,30 @@ export default function GameHUD({
   onToggleDpad?: () => void;
   nextReviveCost?: number;
   canRevive?: boolean;
+  challengeTargetScore?: number;
 }) {
   const { top, right } = useSafeAreaInsets();
   return (
     <>
+      {/* Reminder of the score being chased, for a joined challenge market */}
+      {challengeTargetScore != null && (
+        <View
+          pointerEvents="none"
+          style={[styles.challengeWrap, { top: Math.max(top, 14) }]}
+        >
+          <Text style={[styles.challengeText, pixelShadow]}>
+            Beat {challengeTargetScore} to win
+          </Text>
+        </View>
+      )}
+
       {/* Centered, pixelated coin counter */}
       <View
         pointerEvents="none"
-        style={[styles.coinWrap, { top: Math.max(top, 14) }]}
+        style={[
+          styles.coinWrap,
+          { top: Math.max(top, 14) + (challengeTargetScore != null ? 26 : 0) },
+        ]}
       >
         <View style={styles.coinDot} />
         <Text style={[styles.coinText, pixelShadow]}>{coins}</Text>
@@ -57,7 +74,10 @@ export default function GameHUD({
       {nextReviveCost != null && (
         <View
           pointerEvents="none"
-          style={[styles.reviveWrap, { top: Math.max(top, 14) + 38 }]}
+          style={[
+            styles.reviveWrap,
+            { top: Math.max(top, 14) + 38 + (challengeTargetScore != null ? 26 : 0) },
+          ]}
         >
           <Text
             style={[
@@ -95,6 +115,20 @@ export default function GameHUD({
 }
 
 const styles = StyleSheet.create({
+  challengeWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  challengeText: {
+    fontFamily: "retro",
+    fontSize: 12,
+    color: "#FFD700",
+    backgroundColor: "transparent",
+  },
   coinWrap: {
     position: "absolute",
     left: 0,

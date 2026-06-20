@@ -317,6 +317,7 @@ class Game extends Component {
             onToggleDpad={this.toggleDpad}
             nextReviveCost={this.state.revivesThisRun < MAX_REVIVES_PER_RUN ? this.reviveCost() : undefined}
             canRevive={this.canRevive()}
+            challengeTargetScore={this.props.challengeTargetScore}
           />
         )}
 
@@ -470,7 +471,7 @@ function GameScreen(props) {
   const scheme = useColorScheme();
   const { character, setCharacter, addCoins, coins, highscore, gamesPlayed, incrementGamesPlayed, streak } =
     React.useContext(GameContext);
-  const { highestScore, walletAddress, ownedYetiTiers } = useSui();
+  const { highestScore, walletAddress, ownedYetiTiers, pendingChallenge } = useSui();
 
   return (
     <Game
@@ -487,6 +488,7 @@ function GameScreen(props) {
       walletHighestScore={highestScore}
       walletAddress={walletAddress}
       ownedYetiTiers={ownedYetiTiers}
+      challengeTargetScore={pendingChallenge?.targetScore}
     />
   );
 }

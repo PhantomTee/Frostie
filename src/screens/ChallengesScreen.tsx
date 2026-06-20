@@ -112,7 +112,7 @@ export default function ChallengesScreen({ onClose }: Props) {
     signAndExecute,
     walletError,
     clearWalletError,
-    setPendingChallengeMarketId,
+    setPendingChallenge,
   } = useSui();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(false);
@@ -153,7 +153,7 @@ export default function ChallengesScreen({ onClose }: Props) {
       });
       if (result?.digest) {
         setLastDigest(result.digest);
-        setPendingChallengeMarketId(market.marketId);
+        setPendingChallenge({ marketId: market.marketId, targetScore: market.targetScore });
         await load();
       }
     } catch (e) {
