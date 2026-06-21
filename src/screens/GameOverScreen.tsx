@@ -166,7 +166,6 @@ function GameOver({ ...props }) {
         score={props.score ?? 0}
         inputLog={props.inputLog}
         setGameState={props.setGameState}
-        onShowLeaderboard={props.onShowLeaderboard}
         onShowChallenges={props.onShowChallenges}
         canRevive={props.canRevive}
       />

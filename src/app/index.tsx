@@ -95,6 +95,20 @@ class Game extends Component {
     this.setState({ gameState: AppState.settings });
   };
 
+  // Separate from _cameFromPlaying/openSettingsFromGame above: the HUD's
+  // leaderboard button opens it directly (not via Settings), so its own
+  // flag is needed to resume straight to `playing` on close instead of
+  // bouncing back through the settings screen.
+  _leaderboardFromPlaying = false;
+
+  openLeaderboardFromGame = () => {
+    if (this.state.gameState !== State.Game.playing) return;
+    this._leaderboardFromPlaying = true;
+    this.engine.pause();
+    this.engine.gameState = AppState.leaderboard;
+    this.setState({ gameState: AppState.leaderboard });
+  };
+
   toggleDpad = () => {
     this.setState((s) => ({ dpadEnabled: !s.dpadEnabled }));
   };
@@ -337,6 +351,7 @@ class Game extends Component {
             canRevive={this.canRevive()}
             challengeTargetScore={this.props.challengeTargetScore}
             onOpenSettings={this.openSettingsFromGame}
+            onOpenLeaderboard={this.openLeaderboardFromGame}
           />
         )}
 
@@ -391,7 +406,6 @@ class Game extends Component {
               score={score}
               inputLog={this.engine.inputLog}
               setGameState={(s) => this.updateWithGameState(s)}
-              onShowLeaderboard={() => this.updateWithGameState(AppState.leaderboard)}
               onShowChallenges={() => this.updateWithGameState(AppState.challenges)}
               onRestart={() => this.updateWithGameState(State.Game.none)}
               canRevive={this.canRevive()}
@@ -404,13 +418,22 @@ class Game extends Component {
         {gameState === AppState.leaderboard && (
           <View style={StyleSheet.absoluteFillObject}>
             <LeaderboardScreen
-              onClose={() =>
-                this._cameFromPlaying
-                  ? this.updateWithGameState(AppState.settings)
-                  : this.updateWithGameState(
-                      this.state.score > 0 ? State.Game.gameOver : State.Game.none
-                    )
-              }
+              onClose={() => {
+                if (this._leaderboardFromPlaying) {
+                  this._leaderboardFromPlaying = false;
+                  this.engine.gameState = State.Game.playing;
+                  this.engine.unpause();
+                  this.setState({ gameState: State.Game.playing });
+                  return;
+                }
+                if (this._cameFromPlaying) {
+                  this.updateWithGameState(AppState.settings);
+                  return;
+                }
+                this.updateWithGameState(
+                  this.state.score > 0 ? State.Game.gameOver : State.Game.none
+                );
+              }}
             />
           </View>
         )}
@@ -423,7 +446,13 @@ class Game extends Component {
 
         {gameState === AppState.challenges && (
           <View style={StyleSheet.absoluteFillObject}>
-            <ChallengesScreen onClose={() => this.updateWithGameState(State.Game.none)} />
+            <ChallengesScreen
+              onClose={() => this.updateWithGameState(State.Game.none)}
+              onPlayChallenge={(challenge) => {
+                this.props.setActiveChallenge(challenge);
+                this.updateWithGameState(State.Game.playing);
+              }}
+            />
           </View>
         )}
 
@@ -508,7 +537,7 @@ function GameScreen(props) {
   const scheme = useColorScheme();
   const { character, setCharacter, addCoins, coins, highscore, gamesPlayed, incrementGamesPlayed, streak } =
     React.useContext(GameContext);
-  const { highestScore, walletAddress, ownedYetiTiers, pendingChallenge } = useSui();
+  const { highestScore, walletAddress, ownedYetiTiers, activeChallenge, setActiveChallenge } = useSui();
 
   return (
     <Game
@@ -525,7 +554,8 @@ function GameScreen(props) {
       walletHighestScore={highestScore}
       walletAddress={walletAddress}
       ownedYetiTiers={ownedYetiTiers}
-      challengeTargetScore={pendingChallenge?.targetScore}
+      challengeTargetScore={activeChallenge?.targetScore}
+      setActiveChallenge={setActiveChallenge}
     />
   );
 }

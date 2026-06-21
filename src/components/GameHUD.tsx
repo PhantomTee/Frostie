@@ -3,6 +3,7 @@ import { Image, Platform, StyleSheet, Text, TouchableOpacity, View } from "react
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Images from "@/Images";
+import HoverTooltip from "@/components/HoverTooltip";
 
 // Hard black pixel outline (web) so HUD text matches the chunky score look.
 const pixelShadow = Platform.select({
@@ -32,6 +33,7 @@ export default function GameHUD({
   canRevive,
   challengeTargetScore,
   onOpenSettings,
+  onOpenLeaderboard,
 }: {
   coins: number;
   muted: boolean;
@@ -44,6 +46,7 @@ export default function GameHUD({
   canRevive?: boolean;
   challengeTargetScore?: number;
   onOpenSettings?: () => void;
+  onOpenLeaderboard?: () => void;
 }) {
   const { top, right } = useSafeAreaInsets();
   return (
@@ -102,20 +105,34 @@ export default function GameHUD({
           <Text style={[styles.addr, pixelShadow]}>{shortAddress(walletAddress)}</Text>
         )}
 
-        <TouchableOpacity onPress={onToggleMute} activeOpacity={0.7} hitSlop={8} style={styles.iconBtn}>
-          <Image source={Images.button.mute} style={[styles.icon, muted && styles.iconOff]} />
-        </TouchableOpacity>
+        <HoverTooltip label={muted ? "Unmute" : "Mute"}>
+          <TouchableOpacity onPress={onToggleMute} activeOpacity={0.7} hitSlop={8} style={styles.iconBtn}>
+            <Image source={Images.button.mute} style={[styles.icon, muted && styles.iconOff]} />
+          </TouchableOpacity>
+        </HoverTooltip>
 
         {showDpadToggle && (
-          <TouchableOpacity onPress={onToggleDpad} activeOpacity={0.7} hitSlop={8} style={styles.iconBtn}>
-            <Image source={Images.button.controller} style={[styles.icon, !dpadEnabled && styles.iconOff]} />
-          </TouchableOpacity>
+          <HoverTooltip label={dpadEnabled ? "Hide D-Pad" : "Show D-Pad"}>
+            <TouchableOpacity onPress={onToggleDpad} activeOpacity={0.7} hitSlop={8} style={styles.iconBtn}>
+              <Image source={Images.button.controller} style={[styles.icon, !dpadEnabled && styles.iconOff]} />
+            </TouchableOpacity>
+          </HoverTooltip>
+        )}
+
+        {onOpenLeaderboard && (
+          <HoverTooltip label="Leaderboard">
+            <TouchableOpacity onPress={onOpenLeaderboard} activeOpacity={0.7} hitSlop={8} style={styles.iconBtn}>
+              <Image source={Images.button.rank} style={styles.icon} />
+            </TouchableOpacity>
+          </HoverTooltip>
         )}
 
         {onOpenSettings && (
-          <TouchableOpacity onPress={onOpenSettings} activeOpacity={0.7} hitSlop={8} style={styles.iconBtn}>
-            <Image source={Images.button.settings} style={styles.icon} />
-          </TouchableOpacity>
+          <HoverTooltip label="Settings">
+            <TouchableOpacity onPress={onOpenSettings} activeOpacity={0.7} hitSlop={8} style={styles.iconBtn}>
+              <Image source={Images.button.settings} style={styles.icon} />
+            </TouchableOpacity>
+          </HoverTooltip>
         )}
       </View>
     </>

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 
+import HoverTooltip from "@/components/HoverTooltip";
 import Toast from "@/components/Toast";
 import { useSui } from "@/context/SuiContext";
 import { PACKAGE_ID, CHALLENGE_CONFIG_ID, CLOCK_ID } from "@/sui/contracts";
@@ -148,15 +149,15 @@ async function fetchOpenMarkets(): Promise<FetchResult> {
 
 interface Props {
   onClose: () => void;
+  onPlayChallenge: (challenge: { marketId: string; targetScore: number }) => void;
 }
 
-export default function ChallengesScreen({ onClose }: Props) {
+export default function ChallengesScreen({ onClose, onPlayChallenge }: Props) {
   const {
     walletAddress,
     signAndExecute,
     walletError,
     clearWalletError,
-    setPendingChallenge,
   } = useSui();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [challengersByMarket, setChallengersByMarket] = useState<Map<string, Set<string>>>(
@@ -252,7 +253,8 @@ export default function ChallengesScreen({ onClose }: Props) {
       });
       if (result?.digest) {
         setLastDigest(result.digest);
-        setPendingChallenge({ marketId: market.marketId, targetScore: market.targetScore });
+        // Joining doesn't lock in the next run -- the player picks when
+        // (via PLAY, within the market's window) to actually attempt it.
         await load();
       }
     } catch (e) {
@@ -299,13 +301,17 @@ export default function ChallengesScreen({ onClose }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={onClose} style={styles.iconBtn} activeOpacity={0.7}>
-          <Feather name="arrow-left" size={20} color="#3B9FE8" />
-        </TouchableOpacity>
+        <HoverTooltip label="Back">
+          <TouchableOpacity onPress={onClose} style={styles.iconBtn} activeOpacity={0.7}>
+            <Feather name="arrow-left" size={20} color="#3B9FE8" />
+          </TouchableOpacity>
+        </HoverTooltip>
         <Text style={styles.title}>Challenges</Text>
-        <TouchableOpacity onPress={load} style={styles.iconBtn} activeOpacity={0.7}>
-          <Feather name="refresh-cw" size={18} color="#3B9FE8" />
-        </TouchableOpacity>
+        <HoverTooltip label="Refresh">
+          <TouchableOpacity onPress={load} style={styles.iconBtn} activeOpacity={0.7}>
+            <Feather name="refresh-cw" size={18} color="#3B9FE8" />
+          </TouchableOpacity>
+        </HoverTooltip>
       </View>
 
       {walletError && <Text style={styles.errorText}>{walletError}</Text>}
@@ -348,7 +354,7 @@ export default function ChallengesScreen({ onClose }: Props) {
                       </Text>
                       <Text style={styles.timeText}>{timeLeft(m.closesMs, now)}</Text>
                     </View>
-                    {expired && (
+                    {expired ? (
                       <TouchableOpacity
                         style={styles.actionBtnSecondary}
                         onPress={() => claimExpired(m)}
@@ -359,6 +365,15 @@ export default function ChallengesScreen({ onClose }: Props) {
                         ) : (
                           <Text style={styles.actionTextSecondary}>CLAIM</Text>
                         )}
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={() =>
+                          onPlayChallenge({ marketId: m.marketId, targetScore: m.targetScore })
+                        }
+                      >
+                        <Text style={styles.actionText}>PLAY</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -383,7 +398,7 @@ export default function ChallengesScreen({ onClose }: Props) {
                       </Text>
                       <Text style={styles.timeText}>{timeLeft(m.closesMs, now)}</Text>
                     </View>
-                    {expired && (
+                    {expired ? (
                       <TouchableOpacity
                         style={styles.actionBtnSecondary}
                         onPress={() => claimExpired(m)}
@@ -394,6 +409,15 @@ export default function ChallengesScreen({ onClose }: Props) {
                         ) : (
                           <Text style={styles.actionTextSecondary}>CLAIM</Text>
                         )}
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.actionBtn}
+                        onPress={() =>
+                          onPlayChallenge({ marketId: m.marketId, targetScore: m.targetScore })
+                        }
+                      >
+                        <Text style={styles.actionText}>PLAY</Text>
                       </TouchableOpacity>
                     )}
                   </View>

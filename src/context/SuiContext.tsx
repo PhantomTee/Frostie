@@ -57,12 +57,14 @@ interface SuiContextType {
   // and remounts on close, which would otherwise forget it was submitted.
   submittedScore: number | null;
   setSubmittedScore: (score: number | null) => void;
-  // A ChallengeMarket the player has joined but not yet attempted. Lives
-  // here (not in ChallengesScreen) so the in-game HUD can show the target
-  // score during the next run, and the next GameOver screen can still see
-  // it and offer a "Submit Attempt" action off that run's new RunScore.
-  pendingChallenge: PendingChallenge | null;
-  setPendingChallenge: (challenge: PendingChallenge | null) => void;
+  // The ChallengeMarket the player explicitly chose to play for next, via
+  // "Play" on a joined market in ChallengesScreen. Joining alone doesn't set
+  // this -- a player can join now and pick when (within the market's
+  // window) to actually attempt it. Lives here (not in ChallengesScreen) so
+  // the in-game HUD can show the target score during the run, and the next
+  // GameOver screen can auto-submit the attempt off that run's new RunScore.
+  activeChallenge: PendingChallenge | null;
+  setActiveChallenge: (challenge: PendingChallenge | null) => void;
 }
 
 const SuiContext = createContext<SuiContextType>({
@@ -83,8 +85,8 @@ const SuiContext = createContext<SuiContextType>({
   clearWalletError: () => {},
   submittedScore: null,
   setSubmittedScore: () => {},
-  pendingChallenge: null,
-  setPendingChallenge: () => {},
+  activeChallenge: null,
+  setActiveChallenge: () => {},
 });
 
 export const useSui = () => useContext(SuiContext);
@@ -185,7 +187,7 @@ export function SuiProvider({ children }: { children: React.ReactNode }) {
   const [walletError, setWalletError] = useState<string | null>(null);
   const clearWalletError = useCallback(() => setWalletError(null), []);
   const [submittedScore, setSubmittedScore] = useState<number | null>(null);
-  const [pendingChallenge, setPendingChallenge] = useState<PendingChallenge | null>(null);
+  const [activeChallenge, setActiveChallenge] = useState<PendingChallenge | null>(null);
   const [availableWallets, setAvailableWallets] = useState<AvailableWallet[]>([]);
   const walletRef = useRef<Wallet | null>(null);
   const accountRef = useRef<WalletAccount | null>(null);
@@ -380,8 +382,8 @@ export function SuiProvider({ children }: { children: React.ReactNode }) {
         refreshOwnedTiers,
         walletError,
         clearWalletError,
-        pendingChallenge,
-        setPendingChallenge,
+        activeChallenge,
+        setActiveChallenge,
         submittedScore,
         setSubmittedScore,
       }}

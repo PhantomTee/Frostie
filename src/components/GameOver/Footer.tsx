@@ -15,6 +15,7 @@ import {
 } from "react-native";
 
 import Button from "@/components/Button";
+import HoverTooltip from "@/components/HoverTooltip";
 import Toast from "@/components/Toast";
 import Images from "@/Images";
 import State from "@/state";
@@ -39,7 +40,6 @@ interface Props {
   score: number;
   inputLog?: Array<{ d: string; t: number }>;
   setGameState: (state: any) => void;
-  onShowLeaderboard: () => void;
   onShowChallenges: () => void;
   canRevive?: boolean;
 }
@@ -52,7 +52,6 @@ export default function Footer({
   score,
   inputLog,
   setGameState,
-  onShowLeaderboard,
   onShowChallenges,
   canRevive,
 }: Props) {
@@ -63,8 +62,8 @@ export default function Footer({
     clearWalletError,
     submittedScore,
     setSubmittedScore,
-    pendingChallenge,
-    setPendingChallenge,
+    activeChallenge,
+    setActiveChallenge,
   } = useSui();
   const submitted = submittedScore === score;
   const { width: windowWidth } = useWindowDimensions();
@@ -144,6 +143,16 @@ export default function Footer({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletAddress, score, submitted, submitting, canRevive]);
+
+  // The moment this run's RunScore receipt exists, fire the attempt against
+  // whichever market the player explicitly chose to play for (via PLAY on
+  // ChallengesScreen) -- no separate manual step, and exactly one shot per
+  // run, since submit_attempt consumes the receipt either way.
+  useEffect(() => {
+    if (!runScoreId || !activeChallenge || submittingAttempt) return;
+    submitAttempt();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runScoreId, activeChallenge, submittingAttempt]);
 
   const submitScore = async () => {
     if (submitted || submitting || !walletAddress) return;
@@ -238,7 +247,7 @@ export default function Footer({
   };
 
   const submitAttempt = async () => {
-    if (!runScoreId || !pendingChallenge || submittingAttempt) return;
+    if (!runScoreId || !activeChallenge || submittingAttempt) return;
     setSubmittingAttempt(true);
     clearWalletError();
     try {
@@ -246,7 +255,7 @@ export default function Footer({
         module: "challenge_market",
         function: "submit_attempt",
         args: [
-          { kind: "object", id: pendingChallenge.marketId },
+          { kind: "object", id: activeChallenge.marketId },
           { kind: "object", id: CHALLENGE_CONFIG_ID },
           { kind: "object", id: runScoreId },
           { kind: "object", id: CLOCK_ID },
@@ -258,7 +267,7 @@ export default function Footer({
         // tell win from miss is to read the market's settled/winner fields
         // back after the call lands.
         const market = await suiClient.getObject({
-          id: pendingChallenge.marketId,
+          id: activeChallenge.marketId,
           options: { showContent: true },
         });
         const fields = (market.data?.content as any)?.fields;
@@ -266,12 +275,16 @@ export default function Footer({
           fields?.settled === true &&
           fields?.winner?.toLowerCase?.() === walletAddress?.toLowerCase();
         setAttemptResult(won ? "won" : "missed");
-        if (won) setPendingChallenge(null);
       }
     } catch (e) {
       console.warn("Submit attempt failed", e);
     } finally {
+      // One shot per run either way: a landed call consumes the receipt
+      // regardless of outcome, and a failed one (e.g. rejected signature)
+      // just means the player can hit PLAY again later to retry, rather
+      // than auto-retrying indefinitely.
       setSubmittingAttempt(false);
+      setActiveChallenge(null);
     }
   };
 
@@ -324,20 +337,10 @@ export default function Footer({
         }}
       />
       {walletError && <Text style={styles.errorText}>{walletError}</Text>}
-      {runScoreId && pendingChallenge ? (
-        <View style={styles.marketRow}>
-          <Text style={styles.marketLabel}>You're in a challenge, submit this run?</Text>
-          <TouchableOpacity
-            style={[styles.createMarketBtn, submittingAttempt && styles.createMarketBtnDisabled]}
-            onPress={submitAttempt}
-            disabled={submittingAttempt}
-          >
-            {submittingAttempt ? (
-              <ActivityIndicator color="#0D2347" size="small" />
-            ) : (
-              <Text style={styles.createMarketBtnText}>Submit Attempt</Text>
-            )}
-          </TouchableOpacity>
+      {activeChallenge ? (
+        <View style={styles.statusRow}>
+          <ActivityIndicator color="#3B9FE8" size="small" />
+          <Text style={styles.statusText}>Submitting challenge attempt…</Text>
         </View>
       ) : runScoreId && !marketCreated && (
         <View style={styles.marketRow}>
@@ -410,38 +413,36 @@ export default function Footer({
         </KeyboardAvoidingView>
       </Modal>
       <View style={[styles.container, style]}>
-      {/* Leaderboard */}
-      <Button
-        style={btnSlot}
-        source={Images.button.rank}
-        imageStyle={btnImageStyle}
-        onPress={onShowLeaderboard}
-      />
-
       {/* Home, back to the title screen. Score still auto-saves above. */}
-      <Button
-        style={btnSlot}
-        source={Images.button.home}
-        imageStyle={btnImageStyle}
-        onPress={() => setGameState(State.Game.none)}
-      />
+      <HoverTooltip label="Home">
+        <Button
+          style={btnSlot}
+          source={Images.button.home}
+          imageStyle={btnImageStyle}
+          onPress={() => setGameState(State.Game.none)}
+        />
+      </HoverTooltip>
 
       {/* Challenges, browse/join other players' score wagers */}
-      <Button
-        style={btnSlot}
-        source={Images.button.controller}
-        imageStyle={btnImageStyle}
-        onPress={onShowChallenges}
-      />
+      <HoverTooltip label="Challenges">
+        <Button
+          style={btnSlot}
+          source={Images.button.controller}
+          imageStyle={btnImageStyle}
+          onPress={onShowChallenges}
+        />
+      </HoverTooltip>
 
       {/* Single share action: native share sheet on mobile, Web Share API
           or clipboard copy on web (most desktop browsers lack Web Share) */}
-      <Button
-        style={btnSlot}
-        source={Images.button.share}
-        imageStyle={btnImageStyle}
-        onPress={onShare}
-      />
+      <HoverTooltip label="Share">
+        <Button
+          style={btnSlot}
+          source={Images.button.share}
+          imageStyle={btnImageStyle}
+          onPress={onShare}
+        />
+      </HoverTooltip>
       </View>
     </View>
   );
