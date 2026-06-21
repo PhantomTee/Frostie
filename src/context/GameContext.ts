@@ -7,6 +7,7 @@ export default createContext({
   setHighscore(highscore: number) {},
   coins: 0,
   addCoins(n: number) {},
+  resetCoins() {},
   gamesPlayed: 0,
   incrementGamesPlayed() {},
   streak: 0,

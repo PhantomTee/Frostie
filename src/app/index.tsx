@@ -188,6 +188,7 @@ class Game extends Component {
           // lifetime-runs stat shown on the home screen. Revives reuse this
           // same run via revive(), so they don't hit this branch again.
           this.props.incrementGamesPlayed?.();
+          this.props.resetCoins?.();
           logEvent("run_started", { character: this.props.character });
           if (lastState !== none) {
             this.transitionToGamePlayingState();
@@ -392,7 +393,6 @@ class Game extends Component {
               }
               onShop={() => this.updateWithGameState(AppState.marketplace)}
               onChallenges={() => this.updateWithGameState(AppState.challenges)}
-              coins={this.props.coins ?? 0}
               highscore={this.props.highscore ?? 0}
               gamesPlayed={this.props.gamesPlayed ?? 0}
               streak={this.props.streak ?? 0}
@@ -535,7 +535,7 @@ const GestureView = ({ onStartGesture, onSwipe, ...props }) => {
 
 function GameScreen(props) {
   const scheme = useColorScheme();
-  const { character, setCharacter, addCoins, coins, highscore, gamesPlayed, incrementGamesPlayed, streak } =
+  const { character, setCharacter, addCoins, resetCoins, coins, highscore, gamesPlayed, incrementGamesPlayed, streak } =
     React.useContext(GameContext);
   const { highestScore, walletAddress, ownedYetiTiers, activeChallenge, setActiveChallenge } = useSui();
 
@@ -545,6 +545,7 @@ function GameScreen(props) {
       character={character}
       setCharacter={setCharacter}
       addCoins={addCoins}
+      resetCoins={resetCoins}
       coins={coins}
       highscore={highscore}
       gamesPlayed={gamesPlayed}

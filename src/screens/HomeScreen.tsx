@@ -104,7 +104,6 @@ function Screen(props) {
           }).start();
         }}
       >
-        <Text style={styles.coins}>{props.coins}</Text>
         <Animated.Image
           source={require("../../assets/images/title.png")}
           style={[styles.title, animatedTitleStyle]}
@@ -160,20 +159,6 @@ const styles = StyleSheet.create({
     // Matches the source image's 800x464 ratio so it scales cleanly on
     // narrow screens instead of a fixed height distorting/clipping it.
     aspectRatio: 800 / 464,
-  },
-  coins: {
-    fontFamily: "retro",
-    position: "absolute",
-    right: 8,
-    color: "#FFFFFF",
-    fontSize: 36,
-    letterSpacing: 0.9,
-    backgroundColor: "transparent",
-    textAlign: "right",
-    shadowColor: "black",
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    shadowOffset: { width: 0, height: 0 },
   },
   statsRow: {
     flexDirection: "row",

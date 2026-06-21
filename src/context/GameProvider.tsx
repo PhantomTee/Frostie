@@ -114,6 +114,12 @@ export default function GameProvider({ children }) {
             return next;
           });
         },
+        // Coins don't carry over between runs -- each fresh run starts the
+        // balance back at zero, same as the score.
+        resetCoins: () => {
+          setCoins(0);
+          cacheAsync({ character, highscore, coins: 0, gamesPlayed, streak, lastPlayedDate: lastPlayedDateRef.current, reduceMotion });
+        },
         gamesPlayed,
         // Lifetime runs counter — bumped once per genuine run start (not
         // revives, which continue the same run).
