@@ -2,9 +2,9 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -21,7 +21,7 @@ import Images from "@/Images";
 import State from "@/state";
 import { useSui } from "@/context/SuiContext";
 import { LEADERBOARD_ID, DELEGATE_REGISTRY_ID, CHALLENGE_CONFIG_ID, CLOCK_ID } from "@/sui/contracts";
-import { scoreShareText, SHARE_SITE_URL } from "@/utils/twitterShare";
+import { scoreShareUrl } from "@/utils/twitterShare";
 import { txExplorerUrl } from "@/utils/explorer";
 import { suiClient, getSuiBalanceMist } from "@/sui/client";
 import { uploadReplayBlob } from "@/utils/walrus";
@@ -75,7 +75,6 @@ export default function Footer({
   const btnSlot = { flexGrow: 0, flexShrink: 0, ...btnImageStyle };
   const [submitting, setSubmitting] = useState(false);
   const [savedDigest, setSavedDigest] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
   // Id of the RunScore receipt minted alongside this run's leaderboard
   // submit, set once that PTB lands. Backs the optional "Create Challenge"
   // step below -- only a receipt from record_run can become a market's
@@ -92,32 +91,10 @@ export default function Footer({
   const [reviveGraceLeft, setReviveGraceLeft] = useState<number | null>(null);
   const [showStakeModal, setShowStakeModal] = useState(false);
 
-  // Generic share sheet (distinct from the X-specific button below): native
-  // OS share sheet on mobile, Web Share API where supported, and a clipboard
-  // copy as the universal fallback (desktop browsers mostly lack Web Share).
-  const onShare = async () => {
-    const text = scoreShareText(score, walletAddress);
-    if (Platform.OS !== "web") {
-      try {
-        await Share.share({ message: `${text}\n\n${SHARE_SITE_URL}` });
-      } catch {}
-      return;
-    }
-    const nav = typeof navigator !== "undefined" ? (navigator as any) : null;
-    if (nav?.share) {
-      try {
-        await nav.share({ text, url: SHARE_SITE_URL });
-        return;
-      } catch {
-        // user cancelled or share failed -- fall through to clipboard
-      }
-    }
-    if (nav?.clipboard?.writeText) {
-      try {
-        await nav.clipboard.writeText(`${text}\n\n${SHARE_SITE_URL}`);
-        setLinkCopied(true);
-      } catch {}
-    }
+  // Always a Twitter/X compose window with a prewritten score brag, same
+  // intent-link pattern as the character-select share button.
+  const onShare = () => {
+    Linking.openURL(scoreShareUrl(score, walletAddress));
   };
 
   useEffect(() => {
@@ -309,11 +286,6 @@ export default function Footer({
         linkLabel="View transaction"
         linkUrl={savedDigest ? txExplorerUrl(savedDigest) : undefined}
         onHide={() => setSavedDigest(null)}
-      />
-      <Toast
-        visible={linkCopied}
-        message="Share text copied to clipboard"
-        onHide={() => setLinkCopied(false)}
       />
       <Toast
         visible={!!marketDigest}

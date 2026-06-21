@@ -393,6 +393,7 @@ class Game extends Component {
               }
               onShop={() => this.updateWithGameState(AppState.marketplace)}
               onChallenges={() => this.updateWithGameState(AppState.challenges)}
+              onShowLeaderboard={() => this.updateWithGameState(AppState.leaderboard)}
               highscore={this.props.highscore ?? 0}
               gamesPlayed={this.props.gamesPlayed ?? 0}
               streak={this.props.streak ?? 0}

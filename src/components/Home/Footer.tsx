@@ -4,6 +4,7 @@ import { LayoutAnimation, Animated, StyleSheet, View } from "react-native";
 import Images from "@/Images";
 import Button from "../Button";
 import CharacterPicker from "../CharacterPicker";
+import HoverTooltip from "../HoverTooltip";
 
 const imageStyle = { width: 60, height: 48 };
 
@@ -21,44 +22,60 @@ export default function Footer(props) {
   const renderMenu = React.useMemo(() => {
     return (
       <View style={{ flexDirection: "column" }}>
-        <Button
-          onPress={collapse(props.onChallenges)}
-          style={[{ marginBottom: 8 }, imageStyle]}
-          imageStyle={imageStyle}
-          source={Images.button.rank}
-        />
-        <Button
-          onPress={collapse(props.onShop)}
-          style={[{ marginBottom: 8 }, imageStyle]}
-          imageStyle={imageStyle}
-          source={Images.button.shop}
-        />
+        <HoverTooltip label="Leaderboard">
+          <Button
+            onPress={collapse(props.onShowLeaderboard)}
+            style={[{ marginBottom: 8 }, imageStyle]}
+            imageStyle={imageStyle}
+            source={Images.button.rank}
+          />
+        </HoverTooltip>
+        <HoverTooltip label="Challenges">
+          <Button
+            onPress={collapse(props.onChallenges)}
+            style={[{ marginBottom: 8 }, imageStyle]}
+            imageStyle={imageStyle}
+            source={Images.button.controller}
+          />
+        </HoverTooltip>
+        <HoverTooltip label="Shop">
+          <Button
+            onPress={collapse(props.onShop)}
+            style={[{ marginBottom: 8 }, imageStyle]}
+            imageStyle={imageStyle}
+            source={Images.button.shop}
+          />
+        </HoverTooltip>
       </View>
     );
   }, [collapse]);
 
   return (
     <Animated.View style={[styles.container, props.style]}>
-      <Button
-        style={{ maxHeight: 48 }}
-        onPress={props.onCharacterSelect}
-        imageStyle={imageStyle}
-        source={Images.button.character}
-      />
+      <HoverTooltip label="Character">
+        <Button
+          style={{ maxHeight: 48 }}
+          onPress={props.onCharacterSelect}
+          imageStyle={imageStyle}
+          source={Images.button.character}
+        />
+      </HoverTooltip>
 
       {false && <CharacterPicker />}
 
       <View style={{ flex: 1 }} />
 
       <View style={{ flexDirection: "column-reverse" }}>
-        <Button
-          onPress={() => {
-            setMenuOpen(!menuOpen);
-          }}
-          style={[{ opacity: menuOpen ? 0.8 : 1.0 }, imageStyle]}
-          imageStyle={imageStyle}
-          source={Images.button.menu}
-        />
+        <HoverTooltip label="Menu">
+          <Button
+            onPress={() => {
+              setMenuOpen(!menuOpen);
+            }}
+            style={[{ opacity: menuOpen ? 0.8 : 1.0 }, imageStyle]}
+            imageStyle={imageStyle}
+            source={Images.button.menu}
+          />
+        </HoverTooltip>
 
         {menuOpen && renderMenu}
       </View>
