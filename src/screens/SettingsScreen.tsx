@@ -161,7 +161,7 @@ export default function SettingsScreen({ goBack, onOpenLeaderboard, onOpenMint }
         {/* About */}
         <Text style={styles.sectionTitle}>ABOUT</Text>
         <View style={styles.section}>
-          <SettingRow label="Version" description="0.1.0 — Sui Testnet" icon="info" />
+          <SettingRow label="Version" description="0.1.0, Sui Testnet" icon="info" />
           <SettingRow
             label="Built on Sui"
             description="Your score is recorded on-chain after every run"

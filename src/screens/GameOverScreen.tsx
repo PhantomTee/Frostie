@@ -22,7 +22,7 @@ import GameContext from "@/context/GameContext";
 const banner = [
   {
     color: "#0D2347",
-    title: "Play Again — Beat Your Score",
+    title: "Play Again, Beat Your Score",
   },
   {
     color: "#1A4E8F",
@@ -30,7 +30,7 @@ const banner = [
   },
   {
     color: "#3B9FE8",
-    title: "Collect Coins — Keep Hopping",
+    title: "Collect Coins, Keep Hopping",
   },
 ];
 
@@ -165,9 +165,10 @@ function GameOver({ ...props }) {
         style={{ paddingLeft: left || 4, paddingRight: right || 4 }}
         score={props.score ?? 0}
         inputLog={props.inputLog}
-        showSettings={props.showSettings}
         setGameState={props.setGameState}
         onShowLeaderboard={props.onShowLeaderboard}
+        onShowChallenges={props.onShowChallenges}
+        canRevive={props.canRevive}
       />
     </View>
   );

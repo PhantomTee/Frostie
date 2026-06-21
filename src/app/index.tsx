@@ -73,8 +73,26 @@ class Game extends Component {
     showCharacterSelect: false,
   };
 
+  // Not state, since it only needs to steer settings/leaderboard/mint's
+  // back-navigation without triggering a render of its own.
+  _cameFromPlaying = false;
+
   toggleMute = () => {
     this.setState({ muted: AudioManager.toggleMuted() });
+  };
+
+  // Entry point for the in-game HUD's settings button: pauses the run
+  // (rather than ending it) and remembers to resume to `playing` on close.
+  // Pauses and switches gameState directly, instead of two chained
+  // updateWithGameState calls, since back-to-back setState calls in the
+  // same handler aren't guaranteed to have flushed before the second call
+  // reads this.state.gameState for its lastState check.
+  openSettingsFromGame = () => {
+    if (this.state.gameState !== State.Game.playing) return;
+    this._cameFromPlaying = true;
+    this.engine.pause();
+    this.engine.gameState = AppState.settings;
+    this.setState({ gameState: AppState.settings });
   };
 
   toggleDpad = () => {
@@ -318,6 +336,7 @@ class Game extends Component {
             nextReviveCost={this.state.revivesThisRun < MAX_REVIVES_PER_RUN ? this.reviveCost() : undefined}
             canRevive={this.canRevive()}
             challengeTargetScore={this.props.challengeTargetScore}
+            onOpenSettings={this.openSettingsFromGame}
           />
         )}
 
@@ -340,7 +359,11 @@ class Game extends Component {
           <View style={StyleSheet.absoluteFillObject}>
             <MintNFTScreen
               walletHighestScore={this.props.walletHighestScore ?? 0}
-              onDone={() => this.updateWithGameState(State.Game.none)}
+              onDone={() =>
+                this.updateWithGameState(
+                  this._cameFromPlaying ? AppState.settings : State.Game.none
+                )
+              }
             />
           </View>
         )}
@@ -367,9 +390,9 @@ class Game extends Component {
             <GameOverScreen
               score={score}
               inputLog={this.engine.inputLog}
-              showSettings={() => this.updateWithGameState(AppState.settings)}
               setGameState={(s) => this.updateWithGameState(s)}
               onShowLeaderboard={() => this.updateWithGameState(AppState.leaderboard)}
+              onShowChallenges={() => this.updateWithGameState(AppState.challenges)}
               onRestart={() => this.updateWithGameState(State.Game.none)}
               canRevive={this.canRevive()}
               reviveCost={this.reviveCost()}
@@ -382,9 +405,11 @@ class Game extends Component {
           <View style={StyleSheet.absoluteFillObject}>
             <LeaderboardScreen
               onClose={() =>
-                this.updateWithGameState(
-                  this.state.score > 0 ? State.Game.gameOver : State.Game.none
-                )
+                this._cameFromPlaying
+                  ? this.updateWithGameState(AppState.settings)
+                  : this.updateWithGameState(
+                      this.state.score > 0 ? State.Game.gameOver : State.Game.none
+                    )
               }
             />
           </View>
@@ -410,9 +435,21 @@ class Game extends Component {
                 // button, which writes straight to AudioManager -- resync
                 // so the HUD icon reflects whatever Settings left it as.
                 this.setState({ muted: AudioManager.isMuted() });
-                this.updateWithGameState(
-                  this.state.score > 0 ? State.Game.gameOver : State.Game.none
-                );
+                if (this._cameFromPlaying) {
+                  // Bypassing updateWithGameState here on purpose: its
+                  // "playing" case assumes a fresh run unless the previous
+                  // state was literally `paused`, which isn't true coming
+                  // from the settings/leaderboard/mint cluster -- it would
+                  // otherwise reset the in-progress run.
+                  this._cameFromPlaying = false;
+                  this.engine.gameState = State.Game.playing;
+                  this.engine.unpause();
+                  this.setState({ gameState: State.Game.playing });
+                } else {
+                  this.updateWithGameState(
+                    this.state.score > 0 ? State.Game.gameOver : State.Game.none
+                  );
+                }
               }}
               onOpenLeaderboard={() =>
                 this.updateWithGameState(AppState.leaderboard)

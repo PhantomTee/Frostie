@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Linking,
+  KeyboardAvoidingView,
+  Modal,
   Platform,
   Share,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -18,18 +20,28 @@ import Images from "@/Images";
 import State from "@/state";
 import { useSui } from "@/context/SuiContext";
 import { LEADERBOARD_ID, DELEGATE_REGISTRY_ID, CHALLENGE_CONFIG_ID, CLOCK_ID } from "@/sui/contracts";
-import { scoreShareUrl, scoreShareText, SHARE_SITE_URL } from "@/utils/twitterShare";
+import { scoreShareText, SHARE_SITE_URL } from "@/utils/twitterShare";
 import { txExplorerUrl } from "@/utils/explorer";
-import { suiClient } from "@/sui/client";
+import { suiClient, getSuiBalanceMist } from "@/sui/client";
 import { uploadReplayBlob } from "@/utils/walrus";
+
+// Leaves room for gas so a stake that exactly equals the wallet's balance
+// doesn't fail at sign time with a confusing insufficient-gas error.
+const GAS_BUFFER_MIST = 10_000_000;
+
+// While a revive is still affordable, score submission waits this long
+// before firing, so a player who taps REVIVE doesn't have a wallet popup
+// already in flight for a score that's about to keep climbing.
+const REVIVE_GRACE_SECONDS = 5;
 
 interface Props {
   style?: any;
   score: number;
   inputLog?: Array<{ d: string; t: number }>;
-  showSettings: () => void;
   setGameState: (state: any) => void;
   onShowLeaderboard: () => void;
+  onShowChallenges: () => void;
+  canRevive?: boolean;
 }
 
 const btnStyle  = { width: 60, height: 48 };
@@ -39,9 +51,10 @@ export default function Footer({
   style,
   score,
   inputLog,
-  showSettings,
   setGameState,
   onShowLeaderboard,
+  onShowChallenges,
+  canRevive,
 }: Props) {
   const {
     walletAddress,
@@ -76,6 +89,9 @@ export default function Footer({
   const [submittingAttempt, setSubmittingAttempt] = useState(false);
   const [attemptResult, setAttemptResult] = useState<"won" | "missed" | null>(null);
   const [attemptDigest, setAttemptDigest] = useState<string | null>(null);
+  const [stakeError, setStakeError] = useState<string | null>(null);
+  const [reviveGraceLeft, setReviveGraceLeft] = useState<number | null>(null);
+  const [showStakeModal, setShowStakeModal] = useState(false);
 
   // Generic share sheet (distinct from the X-specific button below): native
   // OS share sheet on mobile, Web Share API where supported, and a clipboard
@@ -106,10 +122,28 @@ export default function Footer({
   };
 
   useEffect(() => {
-    if (walletAddress && score > 0 && !submitted && !submitting) {
+    if (!walletAddress || score <= 0 || submitted || submitting) return;
+
+    if (!canRevive) {
       submitScore();
+      return;
     }
-  }, [walletAddress, score, submitted, submitting]);
+
+    setReviveGraceLeft(REVIVE_GRACE_SECONDS);
+    const interval = setInterval(() => {
+      setReviveGraceLeft((prev) => (prev !== null ? prev - 1 : null));
+    }, 1000);
+    const timeout = setTimeout(() => {
+      submitScore();
+    }, REVIVE_GRACE_SECONDS * 1000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+      setReviveGraceLeft(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletAddress, score, submitted, submitting, canRevive]);
 
   const submitScore = async () => {
     if (submitted || submitting || !walletAddress) return;
@@ -163,13 +197,19 @@ export default function Footer({
   };
 
   const createMarket = async () => {
-    if (!runScoreId || creatingMarket || marketCreated) return;
+    if (!runScoreId || creatingMarket || marketCreated || !walletAddress) return;
     const stakeSui = parseFloat(stakeInput);
     if (!stakeSui || stakeSui <= 0) return;
     const stakeMist = Math.round(stakeSui * 1_000_000_000);
+    setStakeError(null);
     setCreatingMarket(true);
     clearWalletError();
     try {
+      const balance = await getSuiBalanceMist(walletAddress);
+      if (stakeMist + GAS_BUFFER_MIST > balance) {
+        setStakeError("Not enough SUI for that stake plus gas.");
+        return;
+      }
       const result = await signAndExecute({
         module: "challenge_market",
         function: "create_market",
@@ -182,12 +222,19 @@ export default function Footer({
       if (result?.digest) {
         setMarketDigest(result.digest);
         setMarketCreated(true);
+        setShowStakeModal(false);
       }
     } catch (e) {
       console.warn("Create market failed", e);
     } finally {
       setCreatingMarket(false);
     }
+  };
+
+  const cancelStakeModal = () => {
+    if (creatingMarket) return;
+    setShowStakeModal(false);
+    setStakeError(null);
   };
 
   const submitAttempt = async () => {
@@ -230,6 +277,13 @@ export default function Footer({
 
   return (
     <View style={styles.wrap}>
+      {reviveGraceLeft !== null && reviveGraceLeft > 0 && (
+        <View style={styles.statusRow}>
+          <Text style={styles.statusText}>
+            Saving score in {reviveGraceLeft}s, revive to cancel
+          </Text>
+        </View>
+      )}
       {submitting && (
         <View style={styles.statusRow}>
           <ActivityIndicator color="#3B9FE8" size="small" />
@@ -287,38 +341,75 @@ export default function Footer({
         </View>
       ) : runScoreId && !marketCreated && (
         <View style={styles.marketRow}>
-          <Text style={styles.marketLabel}>Stake (SUI) to challenge this score:</Text>
-          <View style={styles.marketControls}>
-            <TextInput
-              style={styles.stakeInput}
-              value={stakeInput}
-              onChangeText={setStakeInput}
-              keyboardType="decimal-pad"
-              editable={!creatingMarket}
-            />
-            <TouchableOpacity
-              style={[styles.createMarketBtn, creatingMarket && styles.createMarketBtnDisabled]}
-              onPress={createMarket}
-              disabled={creatingMarket}
-            >
-              {creatingMarket ? (
-                <ActivityIndicator color="#0D2347" size="small" />
-              ) : (
-                <Text style={styles.createMarketBtnText}>Create Challenge</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.wagerBtn}
+            onPress={() => setShowStakeModal(true)}
+          >
+            <Text style={styles.createMarketBtnText}>Wager on This Score</Text>
+          </TouchableOpacity>
         </View>
       )}
+      <Modal
+        visible={showStakeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelStakeModal}
+        statusBarTranslucent
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <TouchableWithoutFeedback onPress={cancelStakeModal}>
+            <View style={styles.modalBackdrop} />
+          </TouchableWithoutFeedback>
+          <View style={styles.modalCard}>
+            <TouchableOpacity
+              style={styles.modalCloseBtn}
+              onPress={cancelStakeModal}
+              hitSlop={12}
+            >
+              <Text style={styles.modalCloseText}>X</Text>
+            </TouchableOpacity>
+            <Text style={styles.marketLabel}>Stake (SUI) to challenge this score:</Text>
+            <View style={styles.marketControls}>
+              <TextInput
+                style={styles.stakeInput}
+                value={stakeInput}
+                onChangeText={(t) => {
+                  setStakeInput(t);
+                  setStakeError(null);
+                }}
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+                editable={!creatingMarket}
+              />
+              <TouchableOpacity
+                style={[styles.createMarketBtn, creatingMarket && styles.createMarketBtnDisabled]}
+                onPress={createMarket}
+                disabled={creatingMarket}
+                hitSlop={6}
+              >
+                {creatingMarket ? (
+                  <ActivityIndicator color="#0D2347" size="small" />
+                ) : (
+                  <Text style={styles.createMarketBtnText}>Create Challenge</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+            {stakeError && <Text style={styles.errorText}>{stakeError}</Text>}
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={cancelStakeModal}
+              disabled={creatingMarket}
+              hitSlop={10}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
       <View style={[styles.container, style]}>
-      {/* Settings */}
-      <Button
-        style={btnSlot}
-        source={Images.button.settings}
-        imageStyle={btnImageStyle}
-        onPress={showSettings}
-      />
-
       {/* Leaderboard */}
       <Button
         style={btnSlot}
@@ -327,7 +418,7 @@ export default function Footer({
         onPress={onShowLeaderboard}
       />
 
-      {/* Home — back to the title screen. Score still auto-saves above. */}
+      {/* Home, back to the title screen. Score still auto-saves above. */}
       <Button
         style={btnSlot}
         source={Images.button.home}
@@ -335,23 +426,16 @@ export default function Footer({
         onPress={() => setGameState(State.Game.none)}
       />
 
-      {/* Play Again — refresh icon reads as "restart", not "start" */}
+      {/* Challenges, browse/join other players' score wagers */}
       <Button
         style={btnSlot}
-        source={Images.button.refresh}
+        source={Images.button.controller}
         imageStyle={btnImageStyle}
-        onPress={() => setGameState(State.Game.none)}
+        onPress={onShowChallenges}
       />
 
-      {/* Twitter / X share */}
-      <Button
-        style={btnSlot}
-        source={Images.button.social}
-        imageStyle={btnImageStyle}
-        onPress={() => Linking.openURL(scoreShareUrl(score, walletAddress))}
-      />
-
-      {/* Generic share sheet / clipboard copy */}
+      {/* Single share action: native share sheet on mobile, Web Share API
+          or clipboard copy on web (most desktop browsers lack Web Share) */}
       <Button
         style={btnSlot}
         source={Images.button.share}
@@ -412,20 +496,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   stakeInput: {
-    width: 56,
-    height: 32,
+    width: 72,
+    height: 44,
     borderRadius: 6,
     backgroundColor: "#0D2347",
     borderWidth: 1,
     borderColor: "#3B9FE8",
     color: "#FFFFFF",
     fontFamily: "retro",
-    fontSize: 12,
+    fontSize: 13,
     textAlign: "center",
   },
   createMarketBtn: {
-    height: 32,
-    paddingHorizontal: 12,
+    minHeight: 44,
+    paddingHorizontal: 14,
     borderRadius: 6,
     backgroundColor: "#FFD700",
     alignItems: "center",
@@ -438,5 +522,64 @@ const styles = StyleSheet.create({
     fontFamily: "retro",
     fontSize: 10,
     color: "#0D2347",
+  },
+  wagerBtn: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: "#FFD700",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  modalBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(5, 15, 35, 0.75)",
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: "#1A4E8F",
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#3B9FE8",
+    padding: 20,
+    paddingTop: 28,
+    alignItems: "center",
+  },
+  modalCloseBtn: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#0D2347",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCloseText: {
+    fontFamily: "retro",
+    fontSize: 11,
+    color: "#FFFFFF",
+  },
+  modalCancelBtn: {
+    marginTop: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  modalCancelText: {
+    fontFamily: "retro",
+    fontSize: 10,
+    color: "#A0D8FF",
   },
 });

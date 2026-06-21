@@ -31,6 +31,7 @@ export default function GameHUD({
   nextReviveCost,
   canRevive,
   challengeTargetScore,
+  onOpenSettings,
 }: {
   coins: number;
   muted: boolean;
@@ -42,6 +43,7 @@ export default function GameHUD({
   nextReviveCost?: number;
   canRevive?: boolean;
   challengeTargetScore?: number;
+  onOpenSettings?: () => void;
 }) {
   const { top, right } = useSafeAreaInsets();
   return (
@@ -107,6 +109,12 @@ export default function GameHUD({
         {showDpadToggle && (
           <TouchableOpacity onPress={onToggleDpad} activeOpacity={0.7} hitSlop={8} style={styles.iconBtn}>
             <Image source={Images.button.controller} style={[styles.icon, !dpadEnabled && styles.iconOff]} />
+          </TouchableOpacity>
+        )}
+
+        {onOpenSettings && (
+          <TouchableOpacity onPress={onOpenSettings} activeOpacity={0.7} hitSlop={8} style={styles.iconBtn}>
+            <Image source={Images.button.settings} style={styles.icon} />
           </TouchableOpacity>
         )}
       </View>
